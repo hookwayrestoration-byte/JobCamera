@@ -37,6 +37,7 @@ class MainActivity : Activity() {
     private lateinit var photoButton: Button
     private lateinit var videoButton: Button
     private lateinit var finishButton: Button
+    private lateinit var uploadButton: Button
     private val jobs = mutableListOf<Job>()
     private var activeJob: Job? = null
     private var pendingOutput: File? = null
@@ -89,6 +90,12 @@ class MainActivity : Activity() {
             setOnClickListener { capture("video") }
         }
         root.addView(videoButton)
+        uploadButton = Button(this).apply {
+            text = "UPLOAD PHOTO / VIDEO"
+            textSize = 18f
+            setOnClickListener { pickMedia() }
+        }
+        root.addView(uploadButton)   
         finishButton = Button(this).apply {
             text = "BACK / FINISH THIS JOB"
             setOnClickListener {
@@ -125,6 +132,7 @@ class MainActivity : Activity() {
         val enabled = activeJob != null
         photoButton.isEnabled = enabled
         videoButton.isEnabled = enabled
+        uploadButton.isEnabled = enabled
     }
 
     private fun requestCalendarPermission() {
@@ -240,6 +248,27 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun pickMedia() {
+        if (activeJob == null) {
+            status.text = "Please select a Calendar job first."
+            return
+        }
+
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            putExtra(
+                Intent.EXTRA_MIME_TYPES,
+                arrayOf("image/*", "video/*")
+            )
+        }
+
+        try {
+            startActivityForResult(intent, 204)
+        } catch (_: Exception) {
+            status.text = "Could not open the photo and video picker."
+        }
+    }   
     private fun capture(type: String) {
         val job = activeJob ?: return
         val dir = File(filesDir, "jobs/${safe(job.folderName())}").apply { mkdirs() }
@@ -268,6 +297,10 @@ class MainActivity : Activity() {
     @Deprecated("Camera intent result")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 204) {
+            handlePickedMedia(resultCode, data)
+            return
+        }
         val file = pendingOutput ?: return
         if (resultCode == RESULT_OK && file.exists() && file.length() > 0) {
             val prefs = getSharedPreferences("queue", MODE_PRIVATE)
@@ -289,6 +322,37 @@ class MainActivity : Activity() {
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
         WorkManager.getInstance(this).enqueueUniqueWork("hookway-drive-upload", ExistingWorkPolicy.KEEP, request)
+    }
+
+    private fun handlePickedMedia(resultCode: Int, data: Intent?) {
+        if (resultCode != RESULT_OK || data?.data == null) {
+            status.text = "Media selection cancelled."
+            return
+        }
+        val job = activeJob ?: run {
+            status.text = "Please select a Calendar job first."
+            return
+        }
+        var file: File? = null
+        try {
+            val uri = data.data!!
+            val mime = contentResolver.getType(uri) ?: ""
+            val ext = if (mime.startsWith("video/")) "mp4" else if (mime == "image/png") "png" else if (mime == "image/webp") "webp" else "jpg"
+            val dir = File(filesDir, "jobs/${safe(job.folderName())}").apply { mkdirs() }
+            val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.UK).format(Date())
+            file = File(dir, "${stamp}_imported.$ext")
+            val input = contentResolver.openInputStream(uri) ?: throw Exception("Cannot read selected file")
+            input.use { source -> file!!.outputStream().use { output -> source.copyTo(output) } }
+            if (file!!.length() == 0L) throw Exception("Selected file was empty")
+            val prefs = getSharedPreferences("queue", MODE_PRIVATE)
+            val old = prefs.getString("pending_files", "") ?: ""
+            prefs.edit().putString("pending_files", old + file!!.absolutePath + "\n").apply()
+            status.text = "Imported: ${file!!.name}\nSaved offline and queued for upload."
+            enqueueSync()
+        } catch (e: Exception) {
+            file?.delete()
+            status.text = "Import failed: ${e.message}"
+        }
     }
 
     private fun safe(value: String) = value.replace(Regex("[\\\\/:*?\\\"<>|]"), "-")
