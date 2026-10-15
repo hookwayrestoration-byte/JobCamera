@@ -271,7 +271,7 @@ class MainActivity : Activity() {
     }   
     private fun capture(type: String) {
         val job = activeJob ?: return
-        val dir = File(filesDir, "jobs/${safe(job.folderName())}").apply { mkdirs() }
+        val dir = File(filesDir, "jobs/${safe(job.title)}/${SimpleDateFormat("yyyy-MM-dd", Locale.UK).format(Date())}").apply { mkdirs() }
         val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.UK).format(Date())
         val ext = if (type == "image") ".jpg" else ".mp4"
         val file = File(dir, "${stamp}_${type}${ext}")
@@ -338,7 +338,7 @@ class MainActivity : Activity() {
             val uri = data.data!!
             val mime = contentResolver.getType(uri) ?: ""
             val ext = if (mime.startsWith("video/")) "mp4" else if (mime == "image/png") "png" else if (mime == "image/webp") "webp" else "jpg"
-            val dir = File(filesDir, "jobs/${safe(job.folderName())}").apply { mkdirs() }
+            val dir = File(filesDir, "jobs/${safe(job.title)}/${SimpleDateFormat("yyyy-MM-dd", Locale.UK).format(Date())}").apply { mkdirs() }
             val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.UK).format(Date())
             file = File(dir, "${stamp}_imported.$ext")
             val input = contentResolver.openInputStream(uri) ?: throw Exception("Cannot read selected file")
