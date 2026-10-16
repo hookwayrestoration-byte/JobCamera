@@ -96,7 +96,13 @@ class MainActivity : Activity() {
             textSize = 18f
             setOnClickListener { pickMedia() }
         }
-        root.addView(uploadButton)   
+        root.addView(uploadButton)
+        val driveButton = Button(this).apply {
+            text = "CONNECT GOOGLE DRIVE"
+            textSize = 18f
+            setOnClickListener { DriveAuth.request(this@MainActivity) }
+        }
+        root.addView(driveButton)   
         finishButton = Button(this).apply {
             text = "BACK / FINISH THIS JOB"
             setOnClickListener {
@@ -339,6 +345,10 @@ class MainActivity : Activity() {
     @Deprecated("Camera intent result")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == DriveAuth.REQUEST_CODE) {
+            DriveAuth.handleResult(this, data)
+            return
+        }
         if (requestCode == 204) {
             handlePickedMedia(resultCode, data)
             return
