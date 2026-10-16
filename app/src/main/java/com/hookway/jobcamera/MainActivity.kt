@@ -1,4 +1,5 @@
 package com.hookway.jobcamera
+import android.app.AlertDialog
 
 import android.Manifest
 import android.app.Activity
@@ -99,9 +100,33 @@ class MainActivity : Activity() {
         finishButton = Button(this).apply {
             text = "BACK / FINISH THIS JOB"
             setOnClickListener {
-                activeJob = null
-                status.text = "No active job. Select another job above."
-                updateButtons()
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Leave this job?")
+                    .setItems(arrayOf("Pick another job", "Sign off this job", "Cancel")) { dialog, which ->
+                        when (which) {
+                            0 -> {
+                                activeJob = null
+                                spinner.setSelection(0)
+                                status.text = "Choose a job from the list above."
+                                updateButtons()
+                            }
+                            1 -> {
+                                AlertDialog.Builder(this@MainActivity)
+                                    .setTitle("Sign off this job?")
+                                    .setMessage("Are you sure you want to finish this job?")
+                                    .setNegativeButton("Cancel", null)
+                                    .setPositiveButton("Sign off") { _, _ ->
+                                        activeJob = null
+                                        spinner.setSelection(0)
+                                        status.text = "Job signed off. Select another job above."
+                                        updateButtons()
+                                    }
+                                    .show()
+                            }
+                            else -> dialog.dismiss()
+                        }
+                    }
+                    .show()
             }
         }
         root.addView(finishButton)
