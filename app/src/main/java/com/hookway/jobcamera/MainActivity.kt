@@ -234,8 +234,13 @@ class MainActivity : Activity() {
 
         if (querySucceeded && freshJobs.isNotEmpty()) {
             jobs.clear()
-            // Keep distinct events if the same title appears at different times.
-            jobs.addAll(freshJobs.distinctBy { "${it.title}|${it.startMillis}" })
+            // Show upcoming appointments first, with the next appointment at the top.
+            val distinctJobs = freshJobs.distinctBy { "${it.title}|${it.startMillis}" }
+            val sortNow = System.currentTimeMillis()
+            jobs.addAll(distinctJobs.sortedWith(
+                compareBy<Job> { if (it.startMillis >= sortNow) 0 else 1 }
+                    .thenBy { if (it.startMillis >= sortNow) it.startMillis else -it.startMillis }
+            ))
             saveCachedJobs(jobs)
             showJobsInSpinner()
             activeJob = null
