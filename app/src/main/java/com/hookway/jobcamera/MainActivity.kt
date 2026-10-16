@@ -116,11 +116,22 @@ class MainActivity : Activity() {
             setTextColor(0xFF555555.toInt())
         })
         setContentView(ScrollView(this).apply { addView(root) })
-        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onNothingSelected(parent: AdapterView<*>?) { }
+                spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onNothingSelected(parent: AdapterView<*>?) {
+                activeJob = null
+                updateButtons()
+            }
+
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                if (position in jobs.indices) {
-                    activeJob = jobs[position]
+                if (position == 0) {
+                    activeJob = null
+                    status.text = "Choose a Calendar job to begin."
+                    updateButtons()
+                    return
+                }
+                val jobIndex = position - 1
+                if (jobIndex in jobs.indices) {
+                    activeJob = jobs[jobIndex]
                     status.text = "Selected: ${activeJob!!.folderName()}\nNew photos/videos will be saved for this job."
                     updateButtons()
                 }
@@ -217,9 +228,10 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun showJobsInSpinner() {
-        val labels = if (jobs.isEmpty()) listOf("No saved Calendar events") else jobs.map { it.toString() }
+        private fun showJobsInSpinner() {
+        val labels = listOf("Choose a job…") + jobs.map { it.toString() }
         spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
+        spinner.setSelection(0)
     }
 
     private fun saveCachedJobs(items: List<Job>) {
