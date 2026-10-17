@@ -56,16 +56,29 @@ object DriveAuth {
         }
     }
 
-    private fun showResult(activity: Activity, result: AuthorizationResult) {
-        val message = if (!result.accessToken.isNullOrBlank()) {
-            "Google Drive access authorised. Next we'll test the connection."
-        } else {
-            "Google authorisation returned no access token. Please try again."
-        }
+private fun showResult(
+    activity: Activity,
+    result: AuthorizationResult
+) {
+    val token = result.accessToken
+
+    if (!token.isNullOrBlank()) {
+        activity.getSharedPreferences(
+            "drive_auth",
+            Activity.MODE_PRIVATE
+        ).edit()
+            .putString("access_token", token)
+            .apply()
 
         android.widget.Toast.makeText(
             activity,
-            message,
+            "Google Drive connected. Access token saved.",
+            android.widget.Toast.LENGTH_LONG
+        ).show()
+    } else {
+        android.widget.Toast.makeText(
+            activity,
+            "No access token received. Please reconnect Google Drive.",
             android.widget.Toast.LENGTH_LONG
         ).show()
     }
