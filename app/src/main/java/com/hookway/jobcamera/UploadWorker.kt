@@ -28,16 +28,19 @@ class UploadWorker(
             "drive_auth", Context.MODE_PRIVATE
         )
 
-        val queued = prefs.getString("pending_files", "")
-            .orEmpty()
-            .lines()
-            .filter { it.isNotBlank() }
-            .distinct()
+        fun readQueue(): MutableList<String> =
+            prefs.getString("pending_files", "")
+                .orEmpty()
+                .lines()
+                .filter { it.isNotBlank() }
+                .distinct()
+                .toMutableList()
 
+        val queued = readQueue()
         if (queued.isEmpty()) return@withContext Result.success()
 
         val token = authPrefs.getString("access_token", null)
-        if (token.isNullOrBlank()) return@withContext Result.failure()
+        if (token.isNullOrBlank()) return@withContext Result.retry()
 
         try {
             val credential = GoogleCredential().setAccessToken(token)
@@ -50,23 +53,30 @@ class UploadWorker(
                 .setApplicationName("Hookway Job Camera")
                 .build()
 
-            val rootId = findOrCreateFolder(drive, "Hookway Restoration Jobs", "root")
-            val remaining = mutableListOf<String>()
+            val jobsDir = File(applicationContext.filesDir, "jobs")
+            val rootId = findOrCreateFolder(
+                drive, "Hookway Restoration Jobs", "root"
+            )
 
             for (path in queued) {
                 val localFile = File(path)
 
+                // Remove files that no longer exist locally.
                 if (!localFile.exists() || !localFile.isFile) {
+                    removeFromQueue(prefs, path)
                     continue
                 }
 
                 try {
-                    val jobsDir = File(applicationContext.filesDir, "jobs")
                     val relative = localFile.relativeTo(jobsDir)
                     val parts = relative.invariantSeparatorsPath.split("/")
 
-                    val jobName = parts.getOrNull(0) ?: "Unsorted Jobs"
-                    val dateName = parts.getOrNull(1) ?: "Other"
+                    require(parts.size >= 3) {
+                        "File is not inside a job/date folder: $path"
+                    }
+
+                    val jobName = parts[0]
+                    val dateName = parts[1]
 
                     val jobFolderId = findOrCreateFolder(
                         drive, jobName, rootId
@@ -75,35 +85,85 @@ class UploadWorker(
                         drive, dateName, jobFolderId
                     )
 
-                    val metadata = DriveFile().apply {
-                        name = localFile.name
-                        parents = listOf(dateFolderId)
+                    // Avoid creating duplicates if a previous upload
+                    // succeeded but the app did not record completion.
+                    if (!fileExists(
+                            drive, localFile.name, dateFolderId
+                        )) {
+                        val metadata = DriveFile().apply {
+                            name = localFile.name
+                            parents = listOf(dateFolderId)
+                        }
+
+                        val mimeType =
+                            URLConnection.guessContentTypeFromName(
+                                localFile.name
+                            ) ?: "application/octet-stream"
+
+                        drive.files()
+                            .create(
+                                metadata,
+                                FileContent(mimeType, localFile)
+                            )
+                            .setFields("id,name")
+                            .execute()
                     }
 
-                    val mimeType =
-                        URLConnection.guessContentTypeFromName(localFile.name)
-                            ?: "application/octet-stream"
-
-                    drive.files()
-                        .create(metadata, FileContent(mimeType, localFile))
-                        .setFields("id,name")
-                        .execute()
+                    // Remove each successful upload immediately.
+                    // If a later file fails, completed files stay removed.
+                    removeFromQueue(prefs, path)
 
                 } catch (e: Exception) {
-                    remaining.add(path)
-                    throw e
+                    // Keep this file and all other pending files.
+                    return@withContext Result.retry()
                 }
             }
 
-            prefs.edit()
-                .putString("pending_files", remaining.joinToString("\n"))
-                .apply()
-
             Result.success()
-
         } catch (e: Exception) {
             Result.retry()
         }
+    }
+
+    private fun removeFromQueue(
+        prefs: android.content.SharedPreferences,
+        path: String
+    ) {
+        val remaining = prefs.getString("pending_files", "")
+            .orEmpty()
+            .lines()
+            .filter { it.isNotBlank() && it != path }
+            .distinct()
+
+        check(
+            prefs.edit()
+                .putString("pending_files", remaining.joinToString("\n"))
+                .commit()
+        ) {
+            "Could not save upload queue"
+        }
+    }
+
+    private fun fileExists(
+        drive: Drive,
+        name: String,
+        parentId: String
+    ): Boolean {
+        val escapedName = name
+            .replace("\\", "\\\\")
+            .replace("'", "\\'")
+
+        return drive.files().list()
+            .setQ(
+                "name = '$escapedName' and " +
+                "trashed = false and '$parentId' in parents"
+            )
+            .setSpaces("drive")
+            .setPageSize(100)
+            .setFields("files(id)")
+            .execute()
+            .files
+            .isNotEmpty()
     }
 
     private fun findOrCreateFolder(
@@ -126,8 +186,7 @@ class UploadWorker(
             .setFields("files(id,name)")
             .execute()
 
-        val existing = result.files.firstOrNull()
-        if (existing != null) return existing.id
+        result.files.firstOrNull()?.let { return it.id }
 
         val folder = DriveFile().apply {
             this.name = name
