@@ -49,8 +49,7 @@ class MainActivity : Activity() {
     private val permissionRequest = 203
     private val importPhotoRequest = 204
     private val importVideoRequest = 205
-    private val importPhotoRequest = 204
-    private val importVideoRequest = 205
+    
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
