@@ -1,5 +1,3 @@
-Kotlin
-
 package com.hookway.jobcamera
 
 import android.content.Context
