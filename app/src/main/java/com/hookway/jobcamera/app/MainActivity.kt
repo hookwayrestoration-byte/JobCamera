@@ -96,13 +96,13 @@ class MainActivity : Activity() {
         }
         root.addView(videoButton)
         uploadButton = Button(this).apply {
-            text = "UPLOAD PHOTO / VIDEO"
+            text = "IMPORT PHOTO / VIDEO"
             textSize = 18f
             setOnClickListener { pickMedia() }
         }
         root.addView(uploadButton)
         val driveButton = Button(this).apply {
-            text = "CONNECT GOOGLE DRIVE"
+            text = "CONNECT GOOGLE DRIVE / UPLOAD"
             textSize = 18f
             setOnClickListener { DriveAuth.request(this@MainActivity) }
         }
@@ -348,12 +348,15 @@ class MainActivity : Activity() {
 
     @Deprecated("Camera intent result")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == DriveAuth.REQUEST_CODE) {
-            DriveAuth.handleResult(this, data)
-            return
-        }
-        if (requestCode == importPhotoRequest || requestCode == importVideoRequest) {
+    super.onActivityResult(requestCode, resultCode, data)
+
+    if (requestCode == DriveAuth.REQUEST_CODE) {
+        DriveAuth.handleResult(this, data)
+        enqueueSync()
+        return
+    }
+
+    if (requestCode == importPhotoRequest || requestCode == importVideoRequest) {
     handlePickedMedia(resultCode, data)
     return
     }
