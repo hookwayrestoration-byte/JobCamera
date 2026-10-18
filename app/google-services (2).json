@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "717672032488",
+    "firebase_url": "https://hookway-job-camera-commercial-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "hookway-job-camera-commercial",
+    "storage_bucket": "hookway-job-camera-commercial.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:717672032488:android:66c8721f23e4654309015d",
+        "android_client_info": {
+          "package_name": "com.hookway.jobcamera"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "717672032488-dpv21rhbos371e95nme9s47hhjs5hg99.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.hookway.jobcamera",
+            "certificate_hash": "dfc5074ad02cbd8440b2fac96ee5d71381dcd038"
+          }
+        },
+        {
+          "client_id": "717672032488-ftah6umsghlq5gmtn3c6qqeq89mvfubq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDNYcr8ToOK4Xr6gxPl9-lcEgENwXVC7o0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "717672032488-ftah6umsghlq5gmtn3c6qqeq89mvfubq.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
