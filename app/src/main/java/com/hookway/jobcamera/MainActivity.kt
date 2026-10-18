@@ -9,6 +9,7 @@ import android.database.Cursor
 import android.net.Uri
 import android.os.Bundle
 import android.provider.CalendarContract
+import android.provider.MediaStore
 import android.view.Gravity
 import android.view.View
 import android.widget.*
@@ -46,6 +47,10 @@ class MainActivity : Activity() {
     private val photoRequest = 201
     private val videoRequest = 202
     private val permissionRequest = 203
+    private val importPhotoRequest = 204
+    private val importVideoRequest = 205
+    private val importPhotoRequest = 204
+    private val importVideoRequest = 205
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -349,10 +354,10 @@ class MainActivity : Activity() {
             DriveAuth.handleResult(this, data)
             return
         }
-        if (requestCode == 204) {
-            handlePickedMedia(resultCode, data)
-            return
-        }
+        if (requestCode == importPhotoRequest || requestCode == importVideoRequest) {
+    handlePickedMedia(resultCode, data)
+    return
+    }
         val file = pendingOutput ?: return
         if (resultCode == RESULT_OK && file.exists() && file.length() > 0) {
             val prefs = getSharedPreferences("queue", MODE_PRIVATE)
