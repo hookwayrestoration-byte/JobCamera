@@ -23,6 +23,14 @@
           }
         },
         {
+          "client_id": "717672032488-q46gls8l216s3tedbc4v8q73ijec73k4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.hookway.jobcamera",
+            "certificate_hash": "132c873765220e719d8d5124776e77b2cf230163"
+          }
+        },
+        {
           "client_id": "717672032488-ftah6umsghlq5gmtn3c6qqeq89mvfubq.apps.googleusercontent.com",
           "client_type": 3
         }
