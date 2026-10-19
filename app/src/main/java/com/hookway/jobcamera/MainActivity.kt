@@ -346,8 +346,9 @@ class MainActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == DriveAuth.REQUEST_CODE) {
-            DriveAuth.handleResult(this, data)
-            return
+    DriveAuth.handleResult(this, data)
+    enqueueSync()
+    return
         }
         if (requestCode == 204) {
             handlePickedMedia(resultCode, data)
