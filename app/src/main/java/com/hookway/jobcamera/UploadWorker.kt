@@ -2,7 +2,6 @@
 package com.hookway.jobcamera
 
 import android.content.Context
-import androidx.work.BackoffPolicy
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
@@ -15,7 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.URLConnection
-import java.util.concurrent.TimeUnit
+import java.security.MessageDigest
 
 class UploadWorker(
     context: Context,
@@ -27,24 +26,24 @@ class UploadWorker(
         val prefs = app.getSharedPreferences("queue", Context.MODE_PRIVATE)
         val authPrefs = app.getSharedPreferences("drive_auth", Context.MODE_PRIVATE)
 
-        fun readQueue(): List<String> =
-            prefs.getString("pending_files", "").orEmpty()
-                .lines().filter { it.isNotBlank() }.distinct()
-
         fun recordError(message: String) {
             prefs.edit().putString("last_upload_error", message).commit()
         }
 
-        val token = authPrefs.getString("access_token", null)
-        if (token.isNullOrBlank()) {
-            recordError("Google Drive is not authorised. Tap CONNECT GOOGLE DRIVE / UPLOAD.")
-            return@withContext Result.failure()
-        }
+        fun readQueue(): List<String> =
+            prefs.getString("pending_files", "").orEmpty()
+                .lines().filter { it.isNotBlank() }.distinct()
 
         val queued = readQueue()
         if (queued.isEmpty()) {
             recordError("")
             return@withContext Result.success()
+        }
+
+        val token = authPrefs.getString("access_token", null)
+        if (token.isNullOrBlank()) {
+            recordError("Google Drive is not authorised. Connect Drive and try again.")
+            return@withContext Result.failure()
         }
 
         try {
@@ -55,7 +54,9 @@ class UploadWorker(
             ).setApplicationName("Hookway Job Camera").build()
 
             val jobsDir = File(app.filesDir, "jobs")
-            val rootId = findOrCreateFolder(drive, "Hookway Restoration Jobs", "root")
+            val rootId = findOrCreateFolder(
+                drive, "Hookway Restoration Jobs", "root"
+            )
 
             for (path in queued) {
                 if (isStopped) return@withContext Result.retry()
@@ -75,39 +76,73 @@ class UploadWorker(
                         "File is not inside a job/date folder: ${file.name}"
                     }
 
-                    val jobFolder = findOrCreateFolder(drive, parts[0], rootId)
-                    val dateFolder = findOrCreateFolder(drive, parts[1], jobFolder)
+                    val jobFolderId = findOrCreateFolder(
+                        drive, parts[0], rootId
+                    )
+                    val dateFolderId = findOrCreateFolder(
+                        drive, parts[1], jobFolderId
+                    )
 
-                    // Use a stable marker so retries don't upload the same
-                    // file twice if Drive accepted it but the response was lost.
-                    val marker = file.name
-                    if (!fileExists(drive, marker, dateFolder)) {
+                    // Hash the actual file contents to distinguish files
+                    // that happen to have the same filename.
+                    val hash = sha256(file)
+
+                    if (!fileExistsByHash(drive, hash, dateFolderId)) {
                         val metadata = DriveFile().apply {
                             name = file.name
-                            parents = listOf(dateFolder)
-                            appProperties = mapOf("hookwayLocalName" to marker)
+                            parents = listOf(dateFolderId)
+                            appProperties = mapOf(
+                                "hookwaySha256" to hash
+                            )
                         }
 
-                        val mime = URLConnection.guessContentTypeFromName(file.name)
-                            ?: "application/octet-stream"
+                        val mime = URLConnection.guessContentTypeFromName(
+                            file.name
+                        ) ?: "application/octet-stream"
 
-                        drive.files().create(metadata, FileContent(mime, file))
-                            .setFields("id,name")
-                            .execute()
+                        drive.files().create(
+                            metadata,
+                            FileContent(mime, file)
+                        ).setFields("id,name").execute()
                     }
 
+                    // Remove only after Drive confirms success or the
+                    // identical content is already present.
                     removeFromQueue(prefs, path)
                     recordError("")
+
                 } catch (e: Exception) {
-                    recordError("${e.javaClass.simpleName}: ${e.message ?: "Upload failed"}")
+                    recordError(
+                        "${e.javaClass.simpleName}: " +
+                            (e.message ?: "File upload failed")
+                    )
                     return@withContext Result.retry()
                 }
             }
 
             Result.success()
+
         } catch (e: Exception) {
-            recordError("${e.javaClass.simpleName}: ${e.message ?: "Drive connection failed"}")
+            recordError(
+                "${e.javaClass.simpleName}: " +
+                    (e.message ?: "Google Drive upload failed")
+            )
             Result.retry()
+        }
+    }
+
+    private fun sha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().buffered().use { input ->
+            val buffer = ByteArray(8192)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        return digest.digest().joinToString("") {
+            "%02x".format(it)
         }
     }
 
@@ -117,22 +152,35 @@ class UploadWorker(
     ) {
         synchronized(QUEUE_LOCK) {
             val remaining = prefs.getString("pending_files", "").orEmpty()
-                .lines().filter { it.isNotBlank() && it != path }.distinct()
+                .lines()
+                .filter { it.isNotBlank() && it != path }
+                .distinct()
 
-            check(prefs.edit()
-                .putString("pending_files", remaining.joinToString("\n"))
-                .commit()) { "Could not save upload queue" }
+            check(
+                prefs.edit()
+                    .putString("pending_files", remaining.joinToString("\n"))
+                    .commit()
+            ) { "Could not save the upload queue" }
         }
     }
 
-    private fun fileExists(drive: Drive, name: String, parentId: String): Boolean {
-        val escaped = name.replace("\\", "\\\\").replace("'", "\\'")
+    private fun fileExistsByHash(
+        drive: Drive,
+        hash: String,
+        parentId: String
+    ): Boolean {
+        val escapedHash = hash.replace("'", "\\'")
+        val query =
+            "appProperties has { key='hookwaySha256' and value='$escapedHash' } " +
+                "and trashed = false and '$parentId' in parents"
+
         return drive.files().list()
-            .setQ("name = '$escaped' and trashed = false and '$parentId' in parents")
+            .setQ(query)
             .setSpaces("drive")
             .setPageSize(100)
             .setFields("files(id)")
-            .execute().files.isNotEmpty()
+            .execute()
+            .files.isNotEmpty()
     }
 
     private fun findOrCreateFolder(
@@ -140,10 +188,13 @@ class UploadWorker(
         name: String,
         parentId: String
     ): String {
-        val escaped = name.replace("\\", "\\\\").replace("'", "\\'")
+        val escapedName = name
+            .replace("\\", "\\\\")
+            .replace("'", "\\'")
+
         val result = drive.files().list()
             .setQ(
-                "name = '$escaped' and " +
+                "name = '$escapedName' and " +
                     "mimeType = 'application/vnd.google-apps.folder' and " +
                     "trashed = false and '$parentId' in parents"
             )
@@ -160,7 +211,10 @@ class UploadWorker(
             parents = listOf(parentId)
         }
 
-        return drive.files().create(folder).setFields("id").execute().id
+        return drive.files().create(folder)
+            .setFields("id")
+            .execute()
+            .id
     }
 
     companion object {
