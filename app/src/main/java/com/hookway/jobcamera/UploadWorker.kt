@@ -1,6 +1,8 @@
+
 package com.hookway.jobcamera
 
 import android.content.Context
+import androidx.work.BackoffPolicy
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
@@ -13,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.URLConnection
+import java.util.concurrent.TimeUnit
 
 class UploadWorker(
     context: Context,
@@ -20,106 +23,90 @@ class UploadWorker(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        val prefs = applicationContext.getSharedPreferences(
-            "queue", Context.MODE_PRIVATE
-        )
-        val authPrefs = applicationContext.getSharedPreferences(
-            "drive_auth", Context.MODE_PRIVATE
-        )
+        val app = applicationContext
+        val prefs = app.getSharedPreferences("queue", Context.MODE_PRIVATE)
+        val authPrefs = app.getSharedPreferences("drive_auth", Context.MODE_PRIVATE)
 
-        fun readQueue(): MutableList<String> =
-            prefs.getString("pending_files", "")
-                .orEmpty()
-                .lines()
-                .filter { it.isNotBlank() }
-                .distinct()
-                .toMutableList()
+        fun readQueue(): List<String> =
+            prefs.getString("pending_files", "").orEmpty()
+                .lines().filter { it.isNotBlank() }.distinct()
 
-        val queued = readQueue()
-        if (queued.isEmpty()) return@withContext Result.success()
+        fun recordError(message: String) {
+            prefs.edit().putString("last_upload_error", message).commit()
+        }
 
         val token = authPrefs.getString("access_token", null)
-        if (token.isNullOrBlank()) return@withContext Result.retry()
+        if (token.isNullOrBlank()) {
+            recordError("Google Drive is not authorised. Tap CONNECT GOOGLE DRIVE / UPLOAD.")
+            return@withContext Result.failure()
+        }
+
+        val queued = readQueue()
+        if (queued.isEmpty()) {
+            recordError("")
+            return@withContext Result.success()
+        }
 
         try {
-            val credential = GoogleCredential().setAccessToken(token)
-
             val drive = Drive.Builder(
                 GoogleNetHttpTransport.newTrustedTransport(),
                 GsonFactory.getDefaultInstance(),
-                credential
-            )
-                .setApplicationName("Hookway Job Camera")
-                .build()
+                GoogleCredential().setAccessToken(token)
+            ).setApplicationName("Hookway Job Camera").build()
 
-            val jobsDir = File(applicationContext.filesDir, "jobs")
-            val rootId = findOrCreateFolder(
-                drive, "Hookway Restoration Jobs", "root"
-            )
+            val jobsDir = File(app.filesDir, "jobs")
+            val rootId = findOrCreateFolder(drive, "Hookway Restoration Jobs", "root")
 
             for (path in queued) {
-                val localFile = File(path)
+                if (isStopped) return@withContext Result.retry()
 
-                // Remove files that no longer exist locally.
-                if (!localFile.exists() || !localFile.isFile) {
+                val file = File(path)
+
+                if (!file.exists() || !file.isFile) {
                     removeFromQueue(prefs, path)
                     continue
                 }
 
                 try {
-                    val relative = localFile.relativeTo(jobsDir)
+                    val relative = file.relativeTo(jobsDir)
                     val parts = relative.invariantSeparatorsPath.split("/")
 
                     require(parts.size >= 3) {
-                        "File is not inside a job/date folder: $path"
+                        "File is not inside a job/date folder: ${file.name}"
                     }
 
-                    val jobName = parts[0]
-                    val dateName = parts[1]
+                    val jobFolder = findOrCreateFolder(drive, parts[0], rootId)
+                    val dateFolder = findOrCreateFolder(drive, parts[1], jobFolder)
 
-                    val jobFolderId = findOrCreateFolder(
-                        drive, jobName, rootId
-                    )
-                    val dateFolderId = findOrCreateFolder(
-                        drive, dateName, jobFolderId
-                    )
-
-                    // Avoid creating duplicates if a previous upload
-                    // succeeded but the app did not record completion.
-                    if (!fileExists(
-                            drive, localFile.name, dateFolderId
-                        )) {
+                    // Use a stable marker so retries don't upload the same
+                    // file twice if Drive accepted it but the response was lost.
+                    val marker = file.name
+                    if (!fileExists(drive, marker, dateFolder)) {
                         val metadata = DriveFile().apply {
-                            name = localFile.name
-                            parents = listOf(dateFolderId)
+                            name = file.name
+                            parents = listOf(dateFolder)
+                            appProperties = mapOf("hookwayLocalName" to marker)
                         }
 
-                        val mimeType =
-                            URLConnection.guessContentTypeFromName(
-                                localFile.name
-                            ) ?: "application/octet-stream"
+                        val mime = URLConnection.guessContentTypeFromName(file.name)
+                            ?: "application/octet-stream"
 
-                        drive.files()
-                            .create(
-                                metadata,
-                                FileContent(mimeType, localFile)
-                            )
+                        drive.files().create(metadata, FileContent(mime, file))
                             .setFields("id,name")
                             .execute()
                     }
 
-                    // Remove each successful upload immediately.
-                    // If a later file fails, completed files stay removed.
                     removeFromQueue(prefs, path)
-
+                    recordError("")
                 } catch (e: Exception) {
-                    // Keep this file and all other pending files.
+                    recordError("${e.javaClass.simpleName}: ${e.message ?: "Upload failed"}")
                     return@withContext Result.retry()
                 }
             }
 
             Result.success()
         } catch (e: Exception) {
+            recordError("${e.javaClass.simpleName}: ${e.message ?: "Drive connection failed"}")
             Result.retry()
         }
     }
@@ -128,41 +115,24 @@ class UploadWorker(
         prefs: android.content.SharedPreferences,
         path: String
     ) {
-        val remaining = prefs.getString("pending_files", "")
-            .orEmpty()
-            .lines()
-            .filter { it.isNotBlank() && it != path }
-            .distinct()
+        synchronized(QUEUE_LOCK) {
+            val remaining = prefs.getString("pending_files", "").orEmpty()
+                .lines().filter { it.isNotBlank() && it != path }.distinct()
 
-        check(
-            prefs.edit()
+            check(prefs.edit()
                 .putString("pending_files", remaining.joinToString("\n"))
-                .commit()
-        ) {
-            "Could not save upload queue"
+                .commit()) { "Could not save upload queue" }
         }
     }
 
-    private fun fileExists(
-        drive: Drive,
-        name: String,
-        parentId: String
-    ): Boolean {
-        val escapedName = name
-            .replace("\\", "\\\\")
-            .replace("'", "\\'")
-
+    private fun fileExists(drive: Drive, name: String, parentId: String): Boolean {
+        val escaped = name.replace("\\", "\\\\").replace("'", "\\'")
         return drive.files().list()
-            .setQ(
-                "name = '$escapedName' and " +
-                "trashed = false and '$parentId' in parents"
-            )
+            .setQ("name = '$escaped' and trashed = false and '$parentId' in parents")
             .setSpaces("drive")
             .setPageSize(100)
             .setFields("files(id)")
-            .execute()
-            .files
-            .isNotEmpty()
+            .execute().files.isNotEmpty()
     }
 
     private fun findOrCreateFolder(
@@ -170,15 +140,12 @@ class UploadWorker(
         name: String,
         parentId: String
     ): String {
-        val escapedName = name
-            .replace("\\", "\\\\")
-            .replace("'", "\\'")
-
+        val escaped = name.replace("\\", "\\\\").replace("'", "\\'")
         val result = drive.files().list()
             .setQ(
-                "name = '$escapedName' and " +
-                "mimeType = 'application/vnd.google-apps.folder' and " +
-                "trashed = false and '$parentId' in parents"
+                "name = '$escaped' and " +
+                    "mimeType = 'application/vnd.google-apps.folder' and " +
+                    "trashed = false and '$parentId' in parents"
             )
             .setSpaces("drive")
             .setPageSize(100)
@@ -193,10 +160,10 @@ class UploadWorker(
             parents = listOf(parentId)
         }
 
-        return drive.files()
-            .create(folder)
-            .setFields("id")
-            .execute()
-            .id
+        return drive.files().create(folder).setFields("id").execute().id
+    }
+
+    companion object {
+        private val QUEUE_LOCK = Any()
     }
 }
