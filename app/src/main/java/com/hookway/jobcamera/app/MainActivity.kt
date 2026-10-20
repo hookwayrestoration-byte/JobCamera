@@ -47,6 +47,14 @@ class MainActivity : Activity() {
     private var activeJob: Job? = null
     private var pendingOutput: File? = null
     private var pendingType = "image"
+    private var photoLabel = "Before"
+
+    private val settings by lazy {
+        getSharedPreferences("company_settings", MODE_PRIVATE)
+    }
+
+    private fun businessName(): String =
+        settings.getString("business_name", "").orEmpty().trim()
 
     private val photoRequest = 201
     private val videoRequest = 202
@@ -56,10 +64,52 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (businessName().isBlank()) {
+            showBusinessSetup()
+            return
+        }
         buildUi()
         requestCalendarPermission()
         refreshJobs()
         enqueueSync()
+    }
+
+    private fun showBusinessSetup() {
+        val input = EditText(this).apply {
+            hint = "Your business name"
+            setSingleLine(true)
+        }
+
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 24, 48, 0)
+            addView(TextView(this@MainActivity).apply {
+                text = "Enter your business name to personalise uploaded filenames."
+            })
+            addView(input)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Set up your business")
+            .setView(layout)
+            .setCancelable(false)
+            .setPositiveButton("Save") { _, _ ->
+                val name = input.text.toString().trim()
+                if (name.isBlank()) {
+                    Toast.makeText(
+                        this,
+                        "Please enter your business name.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    showBusinessSetup()
+                } else {
+                    settings.edit()
+                        .putString("business_name", name)
+                        .apply()
+                    recreate()
+                }
+            }
+            .show()
     }
 
     private fun buildUi() {
@@ -90,6 +140,28 @@ class MainActivity : Activity() {
             setOnClickListener { refreshJobs() }
         }
         root.addView(refresh)
+
+        val labelRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+
+        val beforeButton = Button(this).apply {
+            text = "BEFORE"
+            setOnClickListener {
+                photoLabel = "Before"
+            }
+        }
+
+        val afterButton = Button(this).apply {
+            text = "AFTER"
+            setOnClickListener {
+                photoLabel = "After"
+            }
+        }
+
+        labelRow.addView(beforeButton, LinearLayout.LayoutParams(0, -2, 1f))
+        labelRow.addView(afterButton, LinearLayout.LayoutParams(0, -2, 1f))
+        root.addView(labelRow)
 
         photoButton = Button(this).apply {
             text = "TAKE PHOTO"
@@ -475,7 +547,9 @@ class MainActivity : Activity() {
         val stamp =
             SimpleDateFormat("yyyyMMdd_HHmmss", Locale.UK).format(Date())
         val ext = if (type == "image") ".jpg" else ".mp4"
-        val file = File(dir, "${stamp}_${type}${ext}")
+        val label = if (type == "image") photoLabel else "Video"
+        val fileName = "${safe(businessName())}_${safe(job.title)}_${label}_${stamp}${ext}"
+        val file = File(dir, fileName)
 
         pendingOutput = file
         pendingType = type
@@ -639,7 +713,11 @@ class MainActivity : Activity() {
                 SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.UK)
                     .format(Date())
 
-            file = File(dir, "${stamp}_imported.$ext")
+            val label = if (ext in listOf("jpg", "jpeg", "png", "webp")) photoLabel else "Video"
+            file = File(
+                dir,
+                "${safe(businessName())}_${safe(job.title)}_${label}_${stamp}.$ext"
+            )
 
             val input = contentResolver.openInputStream(uri)
                 ?: throw Exception("Cannot read selected file")
