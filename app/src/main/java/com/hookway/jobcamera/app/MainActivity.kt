@@ -146,16 +146,18 @@ class MainActivity : Activity() {
         }
 
         val beforeButton = Button(this).apply {
-            text = "BEFORE"
+            text = "BEFORE PHOTO"
             setOnClickListener {
                 photoLabel = "Before"
+                capture("image")
             }
         }
 
         val afterButton = Button(this).apply {
-            text = "AFTER"
+            text = "AFTER PHOTO"
             setOnClickListener {
                 photoLabel = "After"
+                capture("image")
             }
         }
 
