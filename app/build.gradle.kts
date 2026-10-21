@@ -50,5 +50,5 @@ dependencies {
     // Google Drive uploads
     implementation("com.google.api-client:google-api-client-android:1.35.2")
     implementation("com.google.http-client:google-http-client-gson:1.42.3")
-    implementation("com.google.apis:google-api-services-drive:v3-rev20220815-1.32.1")
+    implementation("com.google.apis:google-api-services-drive:v3-rev20240509-2.0.0")
 }
