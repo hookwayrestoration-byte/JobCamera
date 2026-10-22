@@ -661,7 +661,7 @@ class MainActivity : Activity() {
 
         WorkManager.getInstance(this).enqueueUniqueWork(
             "hookway-drive-upload",
-            ExistingWorkPolicy.APPEND_OR_REPLACE
+            ExistingWorkPolicy.APPEND_OR_REPLACE, 
             request
         )
     }
