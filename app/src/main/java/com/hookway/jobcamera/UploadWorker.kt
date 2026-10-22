@@ -27,12 +27,14 @@ class UploadWorker(
         val authPrefs = app.getSharedPreferences("drive_auth", Context.MODE_PRIVATE)
 
         fun recordError(message: String) {
-            prefs.edit().putString("last_upload_error", message).commit()
+            prefs.edit().putString("last_upload_error", message).apply()
         }
 
         fun readQueue(): List<String> =
             prefs.getString("pending_files", "").orEmpty()
-                .lines().filter { it.isNotBlank() }.distinct()
+                .lines()
+                .filter { it.isNotBlank() }
+                .distinct()
 
         val queued = readQueue()
         if (queued.isEmpty()) {
@@ -42,7 +44,7 @@ class UploadWorker(
 
         val token = authPrefs.getString("access_token", null)
         if (token.isNullOrBlank()) {
-            recordError("Google Drive is not authorised. Connect Drive and try again.")
+            recordError("Google Drive is not authorised. Reconnect Drive.")
             return@withContext Result.failure()
         }
 
@@ -83,17 +85,13 @@ class UploadWorker(
                         drive, parts[1], jobFolderId
                     )
 
-                    // Hash the actual file contents to distinguish files
-                    // that happen to have the same filename.
                     val hash = sha256(file)
 
                     if (!fileExistsByHash(drive, hash, dateFolderId)) {
                         val metadata = DriveFile().apply {
                             name = file.name
                             parents = listOf(dateFolderId)
-                            appProperties = mapOf(
-                                "hookwaySha256" to hash
-                            )
+                            appProperties = mapOf("hookwaySha256" to hash)
                         }
 
                         val mime = URLConnection.guessContentTypeFromName(
@@ -106,8 +104,7 @@ class UploadWorker(
                         ).setFields("id,name").execute()
                     }
 
-                    // Remove only after Drive confirms success or the
-                    // identical content is already present.
+                    // Keep local file; remove from queue only after success.
                     removeFromQueue(prefs, path)
                     recordError("")
 
@@ -121,7 +118,6 @@ class UploadWorker(
             }
 
             Result.success()
-
         } catch (e: Exception) {
             recordError(
                 "${e.javaClass.simpleName}: " +

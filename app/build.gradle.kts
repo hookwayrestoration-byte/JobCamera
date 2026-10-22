@@ -27,18 +27,29 @@ android {
     }
 
     packaging {
-        resources {
-            excludes += "/META-INF/DEPENDENCIES"
-        }
+    resources {
+        excludes += "/META-INF/DEPENDENCIES"
+        excludes += "/META-INF/INDEX.LIST"
+        } 
     }
 }
 
 dependencies {
+    // Camera
+    implementation("androidx.camera:camera-core:1.4.2")
+    implementation("androidx.camera:camera-camera2:1.4.2")
+    implementation("androidx.camera:camera-lifecycle:1.4.2")
+    implementation("androidx.camera:camera-view:1.4.2")
+
+    // Android and background uploads
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.work:work-runtime-ktx:2.10.0")
+
+    // Google sign-in
     implementation("com.google.android.gms:play-services-auth:21.3.0")
-    implementation("com.google.api-client:google-api-client-android:2.7.2")
-    implementation("com.google.apis:google-api-services-drive:v3-rev20230822-2.0.0")
-    implementation("com.google.firebase:firebase-analytics-ktx:22.5.0")
-    implementation("com.google.http-client:google-http-client-gson:1.46.3")
+
+    // Google Drive uploads
+    implementation("com.google.api-client:google-api-client-android:1.35.2")
+    implementation("com.google.http-client:google-http-client-gson:1.42.3")
+    implementation("com.google.apis:google-api-services-drive:v3-rev20240509-2.0.0")
 }
