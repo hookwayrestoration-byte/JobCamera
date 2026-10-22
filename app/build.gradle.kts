@@ -30,6 +30,7 @@ android {
     resources {
         excludes += "/META-INF/DEPENDENCIES"
         excludes += "/META-INF/INDEX.LIST"
+        } 
     }
 }
 
