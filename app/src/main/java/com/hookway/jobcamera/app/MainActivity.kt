@@ -456,9 +456,13 @@ class MainActivity : Activity() {
                             cursor.getString(titleCol)?.trim().orEmpty()
                         val eventStart = cursor.getLong(beginCol)
 
-                        if (name.isNotBlank()) {
-                            freshJobs.add(Job(name, eventStart))
-                        }
+                        
+ val calIndex = cursor.getColumnIndex(CalendarContract.Instances.CALENDAR_ID)
+ val calId = if (calIndex >= 0) cursor.getLong(calIndex) else -1L
+ val calendarOk = allowedCalendars == null || calId in allowedCalendars
+ if (name.isNotBlank() && calendarOk) {
+ freshJobs.add(Job(name, eventStart))
+ }
                     }
                 }
             }
