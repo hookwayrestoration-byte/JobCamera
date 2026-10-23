@@ -31,8 +31,10 @@ data class Job(val title: String, val startMillis: Long) {
         return "${title.replace(Regex("[\\\\/:*?\\\"<>|]"), "-")} - $day"
     }
 
-    override fun toString(): String =
-        "${SimpleDateFormat("EEE d MMM, HH:mm", Locale.UK).format(Date(startMillis))} — $title"
+   
+ override fun toString(): String =
+ "${SimpleDateFormat("EEE d MMM yyyy, HH:mm", 
+    Locale.UK).format(Date(startMillis))} - $title"
 }
 
 class MainActivity : Activity() {
