@@ -412,7 +412,6 @@ class MainActivity : Activity() {
             return
         }
 
-        val historyDays = settings.getInt("history_days", 1095)
         
         val now = System.currentTimeMillis()
         val historyDays = settings.getInt("history_days", 1095)
