@@ -1,4 +1,3 @@
-```kotlin
 package com.hookway.jobcamera
 
 import android.app.Activity
