@@ -184,15 +184,16 @@ class MainActivity : Activity() {
             setOnClickListener { pickMedia() }
         }
         root.addView(uploadButton)
-
-        val driveButton = Button(this).apply {
-            text = "CONNECT GOOGLE DRIVE / UPLOAD"
-            textSize = 18f
-            setOnClickListener {
-                DriveAuth.request(this@MainActivity)
-            }
-        }
-        root.addView(driveButton)
+ val settingsButton = Button(this).apply {
+ text = "SETTINGS / CONNECT APPS"
+ textSize = 18f
+ setOnClickListener {
+ startActivity(
+ Intent(this@MainActivity, SettingsActivity::class.java)
+ )
+ }
+ }
+ root.addView(settingsButton)
 
         finishButton = Button(this).apply {
             text = "BACK / FINISH THIS JOB"
