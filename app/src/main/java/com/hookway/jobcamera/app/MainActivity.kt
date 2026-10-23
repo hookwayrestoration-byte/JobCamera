@@ -412,8 +412,12 @@ class MainActivity : Activity() {
             return
         }
 
+        val historyDays = settings.getInt("history_days", 1095)
+        
         val now = System.currentTimeMillis()
-        val start = now - TimeUnit.DAYS.toMillis(90)
+        val historyDays = settings.getInt("history_days", 1095)
+        val start = now - 
+        TimeUnit.DAYS.toMillis(historyDays.toLong())
         val end = now + TimeUnit.DAYS.toMillis(365)
 
         val projection = arrayOf(
@@ -499,7 +503,7 @@ class MainActivity : Activity() {
                     "${jobs.size} previously saved events; they can be selected offline."
 
                 querySucceeded ->
-                    "No Calendar events found in the last 90 days or next 365 days. " +
+                    "No Calendar events found in the chosen date range. " +
                     "Check that the correct Google account's calendars are synced."
 
                 else ->
@@ -509,7 +513,39 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun showJobsInSpinner() {
+ private fun showJobsInSpinner() {
+ val keep = activeJob ?: savedActiveJob()
+ val now = System.currentTimeMillis()
+ val query = filterText.trim().lowercase(Locale.UK)
+
+ shownJobs.clear()
+ shownJobs.addAll(jobs.filter { job ->
+ val modeOk = when (filterMode) {
+ 1 -> job.startMillis >= now
+ 2 -> job.startMillis < now
+ else -> true
+ }
+ modeOk && (query.isBlank() ||
+ job.toString().lowercase(Locale.UK).contains(query))
+ })
+
+ val labels = listOf("Choose a job…") + shownJobs.map { it.toString() }
+ spinner.adapter = ArrayAdapter(
+ this,
+ android.R.layout.simple_spinner_dropdown_item,
+ labels
+ )
+ spinner.setSelection(0)
+
+ if (keep != null) {
+ val index = shownJobs.indexOf(keep)
+ if (index >= 0) {
+ spinner.setSelection(index + 1)
+ }
+ }
+ }
+ 
+    private fun OldshowJobsInSpinner() {
         val labels = listOf("Choose a job…") + jobs.map { it.toString() }
         spinner.adapter = ArrayAdapter(
             this,
