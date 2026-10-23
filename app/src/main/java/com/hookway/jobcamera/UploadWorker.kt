@@ -108,9 +108,17 @@ class UploadWorker(
                         ).setFields("id,name").execute()
                     }
 
-                    // Keep local file; remove from queue only after success.
-                    removeFromQueue(prefs, path)
-                    recordError("")
+ // Keep local file; remove from queue only after success.
+ removeFromQueue(prefs, path)
+ recordError("")
+
+ WebhookSettings.send(
+ app,
+ parts[0],
+ file.name,
+ if (file.extension.lowercase() in listOf("mp4", "3gp", "mov")) "video" else "image"
+ )
+
 
                 } catch (e: Exception) {
                     recordError(
