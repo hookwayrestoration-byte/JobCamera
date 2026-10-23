@@ -420,8 +420,8 @@ class MainActivity : Activity() {
         val end = now + TimeUnit.DAYS.toMillis(365)
 
         val projection = arrayOf(
-            CalendarContract.Instances.TITLE,
-            CalendarContract.Instances.BEGIN
+        CalendarContract.Instances.TITLE,
+        CalendarContract.Instances.BEGIN
         )
 
         val rangeUri = CalendarContract.Instances.CONTENT_URI.buildUpon()
