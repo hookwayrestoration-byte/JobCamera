@@ -1,4 +1,3 @@
-
 package com.hookway.jobcamera
 
 import android.app.AlertDialog
@@ -210,6 +209,7 @@ class MainActivity : Activity() {
                         when (which) {
                             0 -> {
                                 activeJob = null
+                                saveActiveJob(null)
                                 spinner.setSelection(0)
                                 status.text =
                                     "Choose a job from the list above."
@@ -225,6 +225,7 @@ class MainActivity : Activity() {
                                     .setNegativeButton("Cancel", null)
                                     .setPositiveButton("Sign off") { _, _ ->
                                         activeJob = null
+                                        saveActiveJob(null)
                                         spinner.setSelection(0)
                                         status.text =
                                             "Job signed off. Select another job above."
@@ -281,6 +282,7 @@ class MainActivity : Activity() {
                     val jobIndex = position - 1
                     if (jobIndex in jobs.indices) {
                         activeJob = jobs[jobIndex]
+                        saveActiveJob(activeJob)
                         status.text =
                             "Selected: ${activeJob!!.folderName()}\n" +
                             "New photos/videos will be saved for this job."
@@ -288,6 +290,25 @@ class MainActivity : Activity() {
                     }
                 }
             }
+    }
+
+    // Remembers the selected job until it is signed off or another is picked.
+    private fun saveActiveJob(job: Job?) {
+        val editor = getSharedPreferences("active_job", MODE_PRIVATE).edit()
+        if (job == null) {
+            editor.clear()
+        } else {
+            editor.putString("title", job.title)
+            editor.putLong("startMillis", job.startMillis)
+        }
+        editor.apply()
+    }
+
+    private fun savedActiveJob(): Job? {
+        val prefs = getSharedPreferences("active_job", MODE_PRIVATE)
+        val title = prefs.getString("title", null)?.trim().orEmpty()
+        val start = prefs.getLong("startMillis", 0L)
+        return if (title.isBlank() || start <= 0L) null else Job(title, start)
     }
 
     private fun updateButtons() {
@@ -460,6 +481,15 @@ class MainActivity : Activity() {
             labels
         )
         spinner.setSelection(0)
+
+        // Put the remembered job back, if it is still in the list.
+        val saved = savedActiveJob()
+        if (saved != null) {
+            val index = jobs.indexOf(saved)
+            if (index >= 0) {
+                spinner.setSelection(index + 1)
+            }
+        }
     }
 
     private fun saveCachedJobs(items: List<Job>) {
