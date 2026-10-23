@@ -191,8 +191,7 @@ class SettingsActivity : Activity() {
  override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
  super.onActivityResult(requestCode, resultCode, data)
  Integrations.all.firstOrNull { it.requestCode == requestCode }?.let {
-  
- list.addView(TextView(this).apply {
+  list.addView(TextView(this).apply {
  text = "Send to Zapier / Make (webhook)"
  textSize = 18f
  setPadding(0, 32, 0, 8)
@@ -216,6 +215,7 @@ class SettingsActivity : Activity() {
  Toast.makeText(this@SettingsActivity, message, Toast.LENGTH_LONG).show()
  }
  })
+ 
  it.handleResult(this, data)
  Integrations.syncNow(this)
  render()
