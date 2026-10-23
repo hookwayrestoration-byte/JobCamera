@@ -102,7 +102,38 @@ class SettingsActivity : Activity() {
  setPadding(0, 32, 0, 8)
  })
  Integrations.all.forEach { list.addView(card(it)) }
+ list.addView(TextView(this).apply {
+ text = "Calendars to use for jobs"
+ textSize = 18f
+ setPadding(0, 32, 0, 8)
+ })
+ val calendars = CalendarChoice.list(this)
+ if (calendars.isEmpty()) {
+ list.addView(TextView(this).apply {
+ text = "No calendars found. Allow Calendar permission on the main screen first."
+ textSize = 14f
+ })
+ } else {
+ val chosen = (
+ CalendarChoice.selectedIds(this)
+ ?: calendars.map { it.id }.toSet()
+ ).toMutableSet()
 
+ calendars.forEach { cal ->
+ list.addView(CheckBox(this).apply {
+ text = "${cal.name} (${cal.account})"
+ isChecked = cal.id in chosen
+ setOnCheckedChangeListener { _, checked ->
+ if (checked) chosen.add(cal.id) else chosen.remove(cal.id)
+ CalendarChoice.setSelected(this@SettingsActivity, chosen)
+ }
+ })
+ }
+ list.addView(TextView(this).apply {
+ text = "After changing, go back and press Refresh jobs from Calendar."
+ textSize = 14f
+ })
+ }.
  list.addView(TextView(this).apply {
  text = "Calendars to use for jobs"
  textSize = 18f
