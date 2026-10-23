@@ -191,6 +191,31 @@ class SettingsActivity : Activity() {
  override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
  super.onActivityResult(requestCode, resultCode, data)
  Integrations.all.firstOrNull { it.requestCode == requestCode }?.let {
+  
+ list.addView(TextView(this).apply {
+ text = "Send to Zapier / Make (webhook)"
+ textSize = 18f
+ setPadding(0, 32, 0, 8)
+ })
+ val webhookBox = EditText(this).apply {
+ hint = "Paste your https:// webhook link"
+ setSingleLine(true)
+ setText(WebhookSettings.getUrl(this@SettingsActivity))
+ }
+ list.addView(webhookBox)
+ list.addView(Button(this).apply {
+ text = "SAVE WEBHOOK LINK"
+ setOnClickListener {
+ val link = webhookBox.text.toString().trim()
+ WebhookSettings.setUrl(this@SettingsActivity, link)
+ val message = when {
+ link.isBlank() -> "Webhook turned off."
+ link.startsWith("https://") -> "Webhook link saved."
+ else -> "Saved, but the link must start with https:// to be used."
+ }
+ Toast.makeText(this@SettingsActivity, message, Toast.LENGTH_LONG).show()
+ }
+ })
  it.handleResult(this, data)
  Integrations.syncNow(this)
  render()
