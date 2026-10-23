@@ -315,9 +315,9 @@ class MainActivity : Activity() {
                         return
                     }
 
-                    val jobIndex = position - 1
-                    if (jobIndex in jobs.indices) {
-                        activeJob = jobs[jobIndex]
+                     val jobIndex = position - 1
+                     if (jobIndex in shownJobs.indices) {
+                        activeJob = shownJobs[jobIndex]
                         saveActiveJob(activeJob)
                         status.text =
                             "Selected: ${activeJob!!.folderName()}\n" +
