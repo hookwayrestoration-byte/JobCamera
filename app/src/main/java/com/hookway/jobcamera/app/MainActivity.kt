@@ -47,6 +47,9 @@ class MainActivity : Activity() {
     private lateinit var uploadButton: Button
 
     private val jobs = mutableListOf<Job>()
+    private val shownJobs = mutableListOf<Job>()
+    private var filterText = ""
+    private var filterMode = 0
     private var activeJob: Job? = null
     private var pendingOutput: File? = null
     private var pendingType = "image"
@@ -143,6 +146,34 @@ class MainActivity : Activity() {
             setOnClickListener { refreshJobs() }
         }
         root.addView(refresh)
+        
+ val searchBox = EditText(this).apply {
+ hint = "Search jobs by name or date"
+ setSingleLine(true)
+ addTextChangedListener(object : TextWatcher {
+ override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
+ override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
+ override fun afterTextChanged(s: Editable?) {
+ filterText = s?.toString().orEmpty()
+ showJobsInSpinner()
+ }
+ })
+ }
+ root.addView(searchBox)
+
+ val modeButton = Button(this).apply {
+ text = "SHOWING: ALL JOBS"
+ setOnClickListener {
+ filterMode = (filterMode + 1) % 3
+ text = when (filterMode) {
+ 1 -> "SHOWING: UPCOMING ONLY"
+ 2 -> "SHOWING: PAST ONLY"
+ else -> "SHOWING: ALL JOBS"
+ }
+ showJobsInSpinner()
+ }
+ }
+ root.addView(modeButton)
 
         val labelRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
