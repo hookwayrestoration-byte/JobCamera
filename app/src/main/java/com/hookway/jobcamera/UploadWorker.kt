@@ -39,7 +39,6 @@ class UploadWorker(
             recordError("")
             return@withContext Result.success()
         }
-
         val token = authPrefs.getString("access_token", null)
         if (token.isNullOrBlank()) {
             recordError("Google Drive is not authorised. Connect Drive and try again.")
