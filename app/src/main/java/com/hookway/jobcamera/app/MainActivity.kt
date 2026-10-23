@@ -527,8 +527,15 @@ class MainActivity : Activity() {
  2 -> job.startMillis < now
  else -> true
  }
- modeOk && (query.isBlank() ||
- job.toString().lowercase(Locale.UK).contains(query))
+ 
+val fmt = { p: String ->
+ SimpleDateFormat(p, Locale.UK).format(Date(job.startMillis)).lowercase(Locale.UK)
+}
+val dateForms = listOf("d.M.yy", "d.M.yyyy", "dd.MM.yy", "dd.MM.yyyy", "d.M", "dd.MM").map { fmt(it) }
+val dotted = query.replace('/', '.').replace('-', '.')
+val isDate = Regex("[0-9]+(\\.[0-9]+){1,2}").matches(dotted)
+val textMatch = (job.toString() + " " + fmt("d MMMM yyyy") + " " + fmt("EEEE")).lowercase(Locale.UK)
+modeOk && (query.isBlank() || (if (isDate) dateForms.contains(dotted) else textMatch.contains(query)))
  })
 
  val labels = listOf("Choose a job…") + shownJobs.map { it.toString() }
