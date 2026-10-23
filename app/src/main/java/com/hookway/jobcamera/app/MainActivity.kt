@@ -422,7 +422,10 @@ class MainActivity : Activity() {
         val projection = arrayOf(
         CalendarContract.Instances.TITLE,
         CalendarContract.Instances.BEGIN
-        )
+        CalendarContract.Instances.CALENDAR_ID
+ )
+ val allowedCalendars = CalendarChoice.selectedIds(this)
+ 
 
         val rangeUri = CalendarContract.Instances.CONTENT_URI.buildUpon()
             .appendPath(start.toString())
