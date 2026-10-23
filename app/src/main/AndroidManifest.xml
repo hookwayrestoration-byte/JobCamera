@@ -27,5 +27,11 @@
                 <activity
             android:name=".CameraActivity"
             android:exported="false" />
+ <activity
+ android:name=".SettingsActivity"
+ android:exported="false" />
+```
+
+Say "A4" when it's in.
     </application>
 </manifest>
