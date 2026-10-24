@@ -46,7 +46,23 @@ class UploadWorker(
  return@withContext Result.success()
  }
 
-        val token = authPrefs.getString("access_token", null)
+        val token: String? = try {
+ val freshRequest = com.google.android.gms.auth.api.identity.AuthorizationRequest.builder()
+ .setRequestedScopes(listOf(com.google.android.gms.common.api.Scope("https://www.googleapis.com/auth/drive")))
+ .build()
+ val freshResult = com.google.android.gms.tasks.Tasks.await(
+ com.google.android.gms.auth.api.identity.Identity.getAuthorizationClient(app).authorize(freshRequest)
+ )
+ val freshToken = freshResult.accessToken
+ if (!freshToken.isNullOrBlank()) {
+ authPrefs.edit().putString("access_token", freshToken).apply()
+ freshToken
+ } else {
+ authPrefs.getString("access_token", null)
+ }
+ } catch (e: Exception) {
+ authPrefs.getString("access_token", null)
+ }
         if (token.isNullOrBlank()) {
             recordError("Google Drive is not authorised. Reconnect Drive.")
             return@withContext Result.failure()
