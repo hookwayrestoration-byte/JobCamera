@@ -48,8 +48,7 @@ class UploadWorker(
 
         val token: String? = try {
  val freshRequest = com.google.android.gms.auth.api.identity.AuthorizationRequest.builder()
- .setRequestedScopes(listOf(com.google.android.gms.common.api.Scope("https://www.googleapis.com/auth/drive")))
- .build()
+ .setRequestedScopes(listOf(com.google.android.gms.common.api.Scope("https://www.googleapis.com/auth/drive.file")))
  val freshResult = com.google.android.gms.tasks.Tasks.await(
  com.google.android.gms.auth.api.identity.Identity.getAuthorizationClient(app).authorize(freshRequest)
  )
