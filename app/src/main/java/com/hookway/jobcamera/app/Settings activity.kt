@@ -102,6 +102,21 @@ class SettingsActivity : Activity() {
  setPadding(0, 32, 0, 8)
  })
  Integrations.all.forEach { list.addView(card(it)) }
+ val queuePrefs = getSharedPreferences("queue", MODE_PRIVATE)
+ val waiting = queuePrefs.getString("pending_files", "").orEmpty().lines().count { it.isNotBlank() }
+ val lastError = queuePrefs.getString("last_upload_error", "").orEmpty()
+ list.addView(TextView(this).apply {
+ text = "Waiting to upload: $waiting\nLast upload problem: " + (if (lastError.isBlank()) "none" else lastError)
+ textSize = 14f
+ setPadding(0, 8, 0, 8)
+ })
+ list.addView(Button(this).apply {
+ text = "TRY UPLOAD NOW"
+ setOnClickListener {
+ Integrations.syncNow(this@SettingsActivity)
+ Toast.makeText(this@SettingsActivity, "Upload started. Come back to Settings in a minute to see the result.", Toast.LENGTH_LONG).show()
+ }
+ })
 
  list.addView(TextView(this).apply {
  text = "Send to Zapier / Make (webhook)"
