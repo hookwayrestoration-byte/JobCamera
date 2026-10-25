@@ -290,9 +290,10 @@ class MainActivity : Activity() {
             setTextColor(0xFF555555.toInt())
         })
 
-        setContentView(ScrollView(this).apply {
-            addView(root)
-        })
+         val scroll = ScrollView(this).apply { addView(root) }
+ scroll.setBackgroundColor(AppStyle.BLACK)
+ Skin.restyle(scroll)
+ setContentView(scroll)
 
         spinner.onItemSelectedListener =
             object : AdapterView.OnItemSelectedListener {
