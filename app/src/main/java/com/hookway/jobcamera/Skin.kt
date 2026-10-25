@@ -1,4 +1,3 @@
-Understood. That file is too long to carry through Notes on a phone, so we'll skip it. I can get the same look with one short new file and a four-line change to the `MainActivity.kt` 
 package com.hookway.jobcamera
 
 import android.content.res.ColorStateList
