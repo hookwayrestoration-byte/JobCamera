@@ -42,6 +42,7 @@ class UploadWorker(
             return@withContext Result.success()
         }
 
+
  if (!Integrations.isEnabled(app, "drive")) {
  return@withContext Result.success()
  }
