@@ -1,4 +1,4 @@
-# Hookway Restoration Job Camera — Android starter project
+# Job Camera Before & After — Android starter project
 
 This is an Android Studio/Kotlin starter for an offline-first job camera. It is not yet a finished production app.
 
