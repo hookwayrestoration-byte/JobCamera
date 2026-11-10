@@ -1,4 +1,3 @@
-
 package com.hookway.jobcamera
 
 import android.app.AlertDialog
@@ -7,6 +6,8 @@ import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.text.Editable
+import android.text.TextWatcher
 import android.os.Bundle
 import android.provider.CalendarContract
 import android.view.Gravity
@@ -30,8 +31,10 @@ data class Job(val title: String, val startMillis: Long) {
         return "${title.replace(Regex("[\\\\/:*?\\\"<>|]"), "-")} - $day"
     }
 
-    override fun toString(): String =
-        "${SimpleDateFormat("EEE d MMM, HH:mm", Locale.UK).format(Date(startMillis))} — $title"
+   
+ override fun toString(): String =
+ "${SimpleDateFormat("EEE d MMM yyyy, HH:mm", 
+    Locale.UK).format(Date(startMillis))} - $title"
 }
 
 class MainActivity : Activity() {
@@ -44,9 +47,20 @@ class MainActivity : Activity() {
     private lateinit var uploadButton: Button
 
     private val jobs = mutableListOf<Job>()
+    private val shownJobs = mutableListOf<Job>()
+    private var filterText = ""
+    private var filterMode = 0
     private var activeJob: Job? = null
     private var pendingOutput: File? = null
     private var pendingType = "image"
+    private var photoLabel = "Before"
+
+    private val settings by lazy {
+        getSharedPreferences("company_settings", MODE_PRIVATE)
+    }
+
+    private fun businessName(): String =
+        settings.getString("business_name", "").orEmpty().trim()
 
     private val photoRequest = 201
     private val videoRequest = 202
@@ -56,10 +70,52 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (businessName().isBlank()) {
+            showBusinessSetup()
+            return
+        }
         buildUi()
         requestCalendarPermission()
         refreshJobs()
         enqueueSync()
+    }
+
+    private fun showBusinessSetup() {
+        val input = EditText(this).apply {
+            hint = "Your business name"
+            setSingleLine(true)
+        }
+
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 24, 48, 0)
+            addView(TextView(this@MainActivity).apply {
+                text = "Enter your business name to personalise uploaded filenames."
+            })
+            addView(input)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Set up your business")
+            .setView(layout)
+            .setCancelable(false)
+            .setPositiveButton("Save") { _, _ ->
+                val name = input.text.toString().trim()
+                if (name.isBlank()) {
+                    Toast.makeText(
+                        this,
+                        "Please enter your business name.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    showBusinessSetup()
+                } else {
+                    settings.edit()
+                        .putString("business_name", name)
+                        .apply()
+                    recreate()
+                }
+            }
+            .show()
     }
 
     private fun buildUi() {
@@ -90,6 +146,58 @@ class MainActivity : Activity() {
             setOnClickListener { refreshJobs() }
         }
         root.addView(refresh)
+        
+ val searchBox = EditText(this).apply {
+ hint = "Search jobs by name or date"
+ setSingleLine(true)
+ addTextChangedListener(object : TextWatcher {
+ override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
+ override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
+ override fun afterTextChanged(s: Editable?) {
+ filterText = s?.toString().orEmpty()
+ showJobsInSpinner()
+ }
+ })
+ }
+ root.addView(searchBox)
+
+ val modeButton = Button(this).apply {
+ text = "SHOWING: ALL JOBS"
+ setOnClickListener {
+ filterMode = (filterMode + 1) % 3
+ text = when (filterMode) {
+ 1 -> "SHOWING: UPCOMING ONLY"
+ 2 -> "SHOWING: PAST ONLY"
+ else -> "SHOWING: ALL JOBS"
+ }
+ showJobsInSpinner()
+ }
+ }
+ root.addView(modeButton)
+
+        val labelRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+
+        val beforeButton = Button(this).apply {
+            text = "BEFORE PHOTO"
+            setOnClickListener {
+                photoLabel = "Before"
+                capture("image")
+            }
+        }
+
+        val afterButton = Button(this).apply {
+            text = "AFTER PHOTO"
+            setOnClickListener {
+                photoLabel = "After"
+                capture("image")
+            }
+        }
+
+        labelRow.addView(beforeButton, LinearLayout.LayoutParams(0, -2, 1f))
+        labelRow.addView(afterButton, LinearLayout.LayoutParams(0, -2, 1f))
+        root.addView(labelRow)
 
         photoButton = Button(this).apply {
             text = "TAKE PHOTO"
@@ -111,15 +219,16 @@ class MainActivity : Activity() {
             setOnClickListener { pickMedia() }
         }
         root.addView(uploadButton)
-
-        val driveButton = Button(this).apply {
-            text = "CONNECT GOOGLE DRIVE / UPLOAD"
-            textSize = 18f
-            setOnClickListener {
-                DriveAuth.request(this@MainActivity)
-            }
-        }
-        root.addView(driveButton)
+ val settingsButton = Button(this).apply {
+ text = "SETTINGS / CONNECT APPS"
+ textSize = 18f
+ setOnClickListener {
+ startActivity(
+ Intent(this@MainActivity, SettingsActivity::class.java)
+ )
+ }
+ }
+ root.addView(settingsButton)
 
         finishButton = Button(this).apply {
             text = "BACK / FINISH THIS JOB"
@@ -136,6 +245,7 @@ class MainActivity : Activity() {
                         when (which) {
                             0 -> {
                                 activeJob = null
+                                saveActiveJob(null)
                                 spinner.setSelection(0)
                                 status.text =
                                     "Choose a job from the list above."
@@ -151,6 +261,7 @@ class MainActivity : Activity() {
                                     .setNegativeButton("Cancel", null)
                                     .setPositiveButton("Sign off") { _, _ ->
                                         activeJob = null
+                                        saveActiveJob(null)
                                         spinner.setSelection(0)
                                         status.text =
                                             "Job signed off. Select another job above."
@@ -179,9 +290,10 @@ class MainActivity : Activity() {
             setTextColor(0xFF555555.toInt())
         })
 
-        setContentView(ScrollView(this).apply {
-            addView(root)
-        })
+         val scroll = ScrollView(this).apply { addView(root) }
+ scroll.setBackgroundColor(AppStyle.BLACK)
+ Skin.restyle(scroll)
+ setContentView(scroll)
 
         spinner.onItemSelectedListener =
             object : AdapterView.OnItemSelectedListener {
@@ -204,9 +316,10 @@ class MainActivity : Activity() {
                         return
                     }
 
-                    val jobIndex = position - 1
-                    if (jobIndex in jobs.indices) {
-                        activeJob = jobs[jobIndex]
+                     val jobIndex = position - 1
+                     if (jobIndex in shownJobs.indices) {
+                        activeJob = shownJobs[jobIndex]
+                        saveActiveJob(activeJob)
                         status.text =
                             "Selected: ${activeJob!!.folderName()}\n" +
                             "New photos/videos will be saved for this job."
@@ -214,6 +327,25 @@ class MainActivity : Activity() {
                     }
                 }
             }
+    }
+
+    // Remembers the selected job until it is signed off or another is picked.
+    private fun saveActiveJob(job: Job?) {
+        val editor = getSharedPreferences("active_job", MODE_PRIVATE).edit()
+        if (job == null) {
+            editor.clear()
+        } else {
+            editor.putString("title", job.title)
+            editor.putLong("startMillis", job.startMillis)
+        }
+        editor.apply()
+    }
+
+    private fun savedActiveJob(): Job? {
+        val prefs = getSharedPreferences("active_job", MODE_PRIVATE)
+        val title = prefs.getString("title", null)?.trim().orEmpty()
+        val start = prefs.getLong("startMillis", 0L)
+        return if (title.isBlank() || start <= 0L) null else Job(title, start)
     }
 
     private fun updateButtons() {
@@ -281,14 +413,20 @@ class MainActivity : Activity() {
             return
         }
 
+        
         val now = System.currentTimeMillis()
-        val start = now - TimeUnit.DAYS.toMillis(90)
+        val historyDays = settings.getInt("history_days", 1095)
+        val start = now - 
+        TimeUnit.DAYS.toMillis(historyDays.toLong())
         val end = now + TimeUnit.DAYS.toMillis(365)
 
         val projection = arrayOf(
-            CalendarContract.Instances.TITLE,
-            CalendarContract.Instances.BEGIN
-        )
+        CalendarContract.Instances.TITLE,
+        CalendarContract.Instances.BEGIN,
+        CalendarContract.Instances.CALENDAR_ID
+ )
+ val allowedCalendars = CalendarChoice.selectedIds(this)
+ 
 
         val rangeUri = CalendarContract.Instances.CONTENT_URI.buildUpon()
             .appendPath(start.toString())
@@ -319,9 +457,13 @@ class MainActivity : Activity() {
                             cursor.getString(titleCol)?.trim().orEmpty()
                         val eventStart = cursor.getLong(beginCol)
 
-                        if (name.isNotBlank()) {
-                            freshJobs.add(Job(name, eventStart))
-                        }
+                        
+ val calIndex = cursor.getColumnIndex(CalendarContract.Instances.CALENDAR_ID)
+ val calId = if (calIndex >= 0) cursor.getLong(calIndex) else -1L
+ val calendarOk = allowedCalendars == null || calId in allowedCalendars
+ if (name.isNotBlank() && calendarOk) {
+ freshJobs.add(Job(name, eventStart))
+ }
                     }
                 }
             }
@@ -368,7 +510,7 @@ class MainActivity : Activity() {
                     "${jobs.size} previously saved events; they can be selected offline."
 
                 querySucceeded ->
-                    "No Calendar events found in the last 90 days or next 365 days. " +
+                    "No Calendar events found in the chosen date range. " +
                     "Check that the correct Google account's calendars are synced."
 
                 else ->
@@ -378,7 +520,46 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun showJobsInSpinner() {
+ private fun showJobsInSpinner() {
+ val keep = activeJob ?: savedActiveJob()
+ val now = System.currentTimeMillis()
+ val query = filterText.trim().lowercase(Locale.UK)
+
+ shownJobs.clear()
+ shownJobs.addAll(jobs.filter { job ->
+ val modeOk = when (filterMode) {
+ 1 -> job.startMillis >= now
+ 2 -> job.startMillis < now
+ else -> true
+ }
+ 
+val fmt = { p: String ->
+ SimpleDateFormat(p, Locale.UK).format(Date(job.startMillis)).lowercase(Locale.UK)
+}
+val dateForms = listOf("d.M.yy", "d.M.yyyy", "dd.MM.yy", "dd.MM.yyyy", "d.M", "dd.MM").map { fmt(it) }
+val dotted = query.replace('/', '.').replace('-', '.')
+val isDate = Regex("[0-9]+(\\.[0-9]+){1,2}").matches(dotted)
+val textMatch = (job.toString() + " " + fmt("d MMMM yyyy") + " " + fmt("EEEE")).lowercase(Locale.UK)
+modeOk && (query.isBlank() || (if (isDate) dateForms.contains(dotted) else textMatch.contains(query)))
+ })
+
+ val labels = listOf("Choose a job…") + shownJobs.map { it.toString() }
+ spinner.adapter = ArrayAdapter(
+ this,
+ android.R.layout.simple_spinner_dropdown_item,
+ labels
+ )
+ spinner.setSelection(0)
+
+ if (keep != null) {
+ val index = shownJobs.indexOf(keep)
+ if (index >= 0) {
+ spinner.setSelection(index + 1)
+ }
+ }
+ }
+ 
+    private fun OldshowJobsInSpinner() {
         val labels = listOf("Choose a job…") + jobs.map { it.toString() }
         spinner.adapter = ArrayAdapter(
             this,
@@ -386,6 +567,15 @@ class MainActivity : Activity() {
             labels
         )
         spinner.setSelection(0)
+
+        // Put the remembered job back, if it is still in the list.
+        val saved = savedActiveJob()
+        if (saved != null) {
+            val index = jobs.indexOf(saved)
+            if (index >= 0) {
+                spinner.setSelection(index + 1)
+            }
+        }
     }
 
     private fun saveCachedJobs(items: List<Job>) {
@@ -475,7 +665,9 @@ class MainActivity : Activity() {
         val stamp =
             SimpleDateFormat("yyyyMMdd_HHmmss", Locale.UK).format(Date())
         val ext = if (type == "image") ".jpg" else ".mp4"
-        val file = File(dir, "${stamp}_${type}${ext}")
+        val label = if (type == "image") photoLabel else "Video"
+        val fileName = "${safe(businessName())}_${safe(job.title)}_${label}_${stamp}${ext}"
+        val file = File(dir, fileName)
 
         pendingOutput = file
         pendingType = type
@@ -585,7 +777,9 @@ class MainActivity : Activity() {
 
         WorkManager.getInstance(this).enqueueUniqueWork(
             "hookway-drive-upload",
+ business-setup-test
             ExistingWorkPolicy.APPEND_OR_REPLACE,
+   
             request
         )
     }
@@ -639,7 +833,11 @@ class MainActivity : Activity() {
                 SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.UK)
                     .format(Date())
 
-            file = File(dir, "${stamp}_imported.$ext")
+            val label = if (ext in listOf("jpg", "jpeg", "png", "webp")) photoLabel else "Video"
+            file = File(
+                dir,
+                "${safe(businessName())}_${safe(job.title)}_${label}_${stamp}.$ext"
+            )
 
             val input = contentResolver.openInputStream(uri)
                 ?: throw Exception("Cannot read selected file")

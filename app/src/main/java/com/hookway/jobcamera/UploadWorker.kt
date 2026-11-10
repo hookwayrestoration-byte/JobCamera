@@ -27,21 +27,45 @@ class UploadWorker(
         val authPrefs = app.getSharedPreferences("drive_auth", Context.MODE_PRIVATE)
 
         fun recordError(message: String) {
-            prefs.edit().putString("last_upload_error", message).commit()
+            prefs.edit().putString("last_upload_error", message).apply()
         }
 
         fun readQueue(): List<String> =
             prefs.getString("pending_files", "").orEmpty()
-                .lines().filter { it.isNotBlank() }.distinct()
+                .lines()
+                .filter { it.isNotBlank() }
+                .distinct()
 
         val queued = readQueue()
         if (queued.isEmpty()) {
             recordError("")
             return@withContext Result.success()
         }
-        val token = authPrefs.getString("access_token", null)
+
+
+ if (!Integrations.isEnabled(app, "drive")) {
+ return@withContext Result.success()
+ }
+
+        val token: String? = try {
+ val freshRequest = com.google.android.gms.auth.api.identity.AuthorizationRequest.builder()
+ .setRequestedScopes(listOf(com.google.android.gms.common.api.Scope("https://www.googleapis.com/auth/drive.file")))
+ .build()
+            val freshResult = com.google.android.gms.tasks.Tasks.await(
+ com.google.android.gms.auth.api.identity.Identity.getAuthorizationClient(app).authorize(freshRequest)
+ )
+ val freshToken = freshResult.accessToken
+ if (!freshToken.isNullOrBlank()) {
+ authPrefs.edit().putString("access_token", freshToken).apply()
+ freshToken
+ } else {
+ authPrefs.getString("access_token", null)
+ }
+ } catch (e: Exception) {
+ authPrefs.getString("access_token", null)
+ }
         if (token.isNullOrBlank()) {
-            recordError("Google Drive is not authorised. Connect Drive and try again.")
+            recordError("Google Drive is not authorised. Reconnect Drive.")
             return@withContext Result.failure()
         }
 
@@ -82,17 +106,13 @@ class UploadWorker(
                         drive, parts[1], jobFolderId
                     )
 
-                    // Hash the actual file contents to distinguish files
-                    // that happen to have the same filename.
                     val hash = sha256(file)
 
                     if (!fileExistsByHash(drive, hash, dateFolderId)) {
                         val metadata = DriveFile().apply {
                             name = file.name
                             parents = listOf(dateFolderId)
-                            appProperties = mapOf(
-                                "hookwaySha256" to hash
-                            )
+                            appProperties = mapOf("hookwaySha256" to hash)
                         }
 
                         val mime = URLConnection.guessContentTypeFromName(
@@ -105,10 +125,17 @@ class UploadWorker(
                         ).setFields("id,name").execute()
                     }
 
-                    // Remove only after Drive confirms success or the
-                    // identical content is already present.
-                    removeFromQueue(prefs, path)
-                    recordError("")
+ // Keep local file; remove from queue only after success.
+ removeFromQueue(prefs, path)
+ recordError("")
+
+ WebhookSettings.send(
+ app,
+ parts[0],
+ file.name,
+ if (file.extension.lowercase() in listOf("mp4", "3gp", "mov")) "video" else "image"
+ )
+
 
                 } catch (e: Exception) {
                     recordError(
@@ -120,7 +147,6 @@ class UploadWorker(
             }
 
             Result.success()
-
         } catch (e: Exception) {
             recordError(
                 "${e.javaClass.simpleName}: " +

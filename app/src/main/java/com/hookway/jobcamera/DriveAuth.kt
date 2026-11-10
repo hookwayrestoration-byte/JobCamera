@@ -13,7 +13,7 @@ object DriveAuth {
     fun request(activity: Activity) {
         val request = AuthorizationRequest.builder()
             .setRequestedScopes(
-                listOf(Scope("https://www.googleapis.com/auth/drive"))
+                listOf(Scope("https://www.googleapis.com/auth/drive.file"))
             )
             .build()
 
