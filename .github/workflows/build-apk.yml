@@ -4,7 +4,7 @@ name: Build Hookway Job Camera APK
 on:
   workflow_dispatch:
   push:
-    branches: [main, master, business-setup-test]
+    branches: [main, master, business-setup-test, hookway-visual-build-fix]
 
 permissions:
   contents: read
