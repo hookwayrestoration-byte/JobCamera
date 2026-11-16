@@ -57,6 +57,7 @@ class SettingsActivity : Activity() {
  private fun render() {
  list.removeAllViews()
 
+ add(BrandHeader.create(this), 0, 12)
  add(tv("SETTINGS") { AppStyle.title(it) })
  add(View(this).apply { setBackgroundColor(AppStyle.WOOD) }, 4, 16)
  (list.getChildAt(1).layoutParams as LinearLayout.LayoutParams).height = AppStyle.dp(list, 4)
