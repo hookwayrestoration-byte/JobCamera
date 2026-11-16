@@ -77,9 +77,11 @@ class UploadWorker(
             ).setApplicationName("Hookway Job Camera").build()
 
             val jobsDir = File(app.filesDir, "jobs")
-            val rootId = findOrCreateFolder(
-                drive, "Hookway Restoration Jobs", "root"
-            )
+            val businessName = app.getSharedPreferences(
+                "company_settings", Context.MODE_PRIVATE
+            ).getString("business_name", "Hookway Restoration").orEmpty().trim()
+                .ifBlank { "Hookway Restoration" }
+            val rootId = findOrCreateFolder(drive, businessName, "root")
 
             for (path in queued) {
                 if (isStopped) return@withContext Result.retry()
