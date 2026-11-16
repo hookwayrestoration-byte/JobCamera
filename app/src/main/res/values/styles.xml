@@ -8,6 +8,5 @@
         <item name="android:windowSplashScreenBackground">#0D0D0D</item>
         <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
         <item name="android:windowSplashScreenBrandingImage">@drawable/hookway_logo</item>
-        <item name="android:postSplashScreenTheme">@style/AppTheme</item>
     </style>
 </resources>
