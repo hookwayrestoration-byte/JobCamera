@@ -4,12 +4,16 @@ import android.app.AlertDialog
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.text.Editable
 import android.text.TextWatcher
 import android.os.Bundle
+import android.os.Build
+import android.os.Environment
 import android.provider.CalendarContract
+import android.provider.MediaStore
 import android.view.Gravity
 import android.view.View
 import android.widget.*
@@ -20,6 +24,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.net.URLConnection
 import java.util.concurrent.TimeUnit
 import org.json.JSONArray
 import org.json.JSONObject
@@ -740,9 +745,15 @@ modeOk && (query.isBlank() || (if (isDate) dateForms.contains(dotted) else textM
                 .putString(key, old + file.absolutePath + "\n")
                 .apply()
 
+            val deviceFolder = saveToDeviceJobFolder(
+                file,
+                activeJob ?: return,
+                pendingType == "video"
+            )
             status.text =
                 "Saved offline: ${file.name}\n" +
-                "Queued on tablet. ${file.length() / 1024} KB."
+                "Queued on tablet. ${file.length() / 1024} KB." +
+                if (deviceFolder != null) "\nAlso saved on device: $deviceFolder" else ""
 
             enqueueSync()
         } else {
@@ -855,14 +866,67 @@ modeOk && (query.isBlank() || (if (isDate) dateForms.contains(dotted) else textM
                 )
                 .apply()
 
+            val deviceFolder = saveToDeviceJobFolder(
+                file!!,
+                job,
+                mime.startsWith("video/")
+            )
             status.text =
                 "Imported: ${file!!.name}\n" +
-                "Saved offline and queued for upload."
+                "Saved offline and queued for upload." +
+                if (deviceFolder != null) "\nAlso saved on device: $deviceFolder" else ""
 
             enqueueSync()
         } catch (e: Exception) {
             file?.delete()
             status.text = "Import failed: ${e.message}"
+        }
+    }
+
+    // Publishes a second copy into a normal device folder, grouped by the selected job.
+    // The private copy remains the upload source and is retained after syncing.
+    private fun saveToDeviceJobFolder(
+        source: File,
+        job: Job,
+        isVideo: Boolean
+    ): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+
+        val root = if (isVideo) {
+            Environment.DIRECTORY_MOVIES
+        } else {
+            Environment.DIRECTORY_PICTURES
+        }
+        val relativePath = "$root/Hookway Job Camera/${safe(job.folderName())}/"
+        val mime = URLConnection.guessContentTypeFromName(source.name)
+            ?: if (isVideo) "video/mp4" else "image/jpeg"
+        val collection = if (isVideo) {
+            MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+        } else {
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        }
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, source.name)
+            put(MediaStore.MediaColumns.MIME_TYPE, mime)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, relativePath)
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+
+        val destination = contentResolver.insert(collection, values) ?: return null
+        return try {
+            val output = contentResolver.openOutputStream(destination)
+                ?: throw IllegalStateException("Could not open device media folder")
+            output.use { target ->
+                source.inputStream().use { input -> input.copyTo(target) }
+            }
+            val published = ContentValues().apply {
+                put(MediaStore.MediaColumns.IS_PENDING, 0)
+            }
+            contentResolver.update(destination, published, null, null)
+            relativePath
+        } catch (_: Exception) {
+            contentResolver.delete(destination, null, null)
+            null
         }
     }
 
