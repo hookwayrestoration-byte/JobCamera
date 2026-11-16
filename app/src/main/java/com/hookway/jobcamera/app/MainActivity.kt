@@ -125,13 +125,7 @@ class MainActivity : Activity() {
             gravity = Gravity.TOP
         }
 
-        val title = TextView(this).apply {
-            text = "HOOKWAY RESTORATION\nJOB CAMERA"
-            textSize = 24f
-            setTextColor(0xFF17324D.toInt())
-            setPadding(0, 0, 0, 24)
-        }
-        root.addView(title)
+        root.addView(BrandHeader.create(this))
 
         root.addView(TextView(this).apply {
             text = "Choose a Calendar job"
@@ -777,7 +771,6 @@ modeOk && (query.isBlank() || (if (isDate) dateForms.contains(dotted) else textM
 
         WorkManager.getInstance(this).enqueueUniqueWork(
             "hookway-drive-upload",
- business-setup-test
             ExistingWorkPolicy.APPEND_OR_REPLACE,
    
             request
