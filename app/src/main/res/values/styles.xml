@@ -1,0 +1,13 @@
+<resources>
+    <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowBackground">#0D0D0D</item>
+        <item name="android:statusBarColor">#0D0D0D</item>
+        <item name="android:navigationBarColor">#0D0D0D</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowSplashScreenBackground">#0D0D0D</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="android:windowSplashScreenBrandingImage">@drawable/hookway_logo</item>
+        <item name="android:postSplashScreenTheme">@style/AppTheme</item>
+    </style>
+</resources>
