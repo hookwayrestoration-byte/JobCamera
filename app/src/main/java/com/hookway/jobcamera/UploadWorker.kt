@@ -89,8 +89,12 @@ class UploadWorker(
                 val file = File(path)
 
                 if (!file.exists() || !file.isFile) {
-                    removeFromQueue(prefs, path)
-                    continue
+                    // Keep the queued item and report the missing private upload source.
+                    recordError(
+                        "Upload source is missing for " + file.name +
+                            ". The item remains queued; the device copy is not proof of a Drive upload."
+                    )
+                    return@withContext Result.failure()
                 }
 
                 try {
