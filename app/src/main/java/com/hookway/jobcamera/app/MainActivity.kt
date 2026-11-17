@@ -203,7 +203,10 @@ class MainActivity : Activity() {
         photoButton = Button(this).apply {
             text = "TAKE PHOTO"
             textSize = 18f
-            setOnClickListener { capture("image") }
+            setOnClickListener {
+                photoLabel = "Photo"
+                capture("image")
+            }
         }
         root.addView(photoButton)
 
@@ -658,7 +661,7 @@ modeOk && (query.isBlank() || (if (isDate) dateForms.contains(dotted) else textM
 
         val dir = File(
             filesDir,
-            "jobs/${safe(job.title)}/" +
+            "jobs/${safe(job.folderName())}/" +
             SimpleDateFormat("yyyy-MM-dd", Locale.UK).format(Date())
         ).apply {
             mkdirs()
@@ -832,7 +835,7 @@ modeOk && (query.isBlank() || (if (isDate) dateForms.contains(dotted) else textM
 
             val dir = File(
                 filesDir,
-                "jobs/${safe(job.title)}/" +
+                "jobs/${safe(job.folderName())}/" +
                 SimpleDateFormat("yyyy-MM-dd", Locale.UK).format(Date())
             ).apply {
                 mkdirs()
@@ -907,7 +910,9 @@ modeOk && (query.isBlank() || (if (isDate) dateForms.contains(dotted) else textM
         } else {
             Environment.DIRECTORY_PICTURES
         }
-        val relativePath = "$root/Hookway Job Camera/${safe(job.folderName())}/"
+        val visitDate = source.parentFile?.name
+            ?: SimpleDateFormat("yyyy-MM-dd", Locale.UK).format(Date())
+        val relativePath = "$root/Hookway Job Camera/${safe(job.folderName())}/$visitDate/"
         val mime = URLConnection.guessContentTypeFromName(source.name)
             ?: if (isVideo) "video/mp4" else "image/jpeg"
         val collection = if (isVideo) {
