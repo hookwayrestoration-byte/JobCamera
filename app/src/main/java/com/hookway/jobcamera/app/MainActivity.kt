@@ -57,6 +57,8 @@ class MainActivity : Activity() {
     private var filterMode = 0
     private var activeJob: Job? = null
     private var pendingOutput: File? = null
+    private var pendingJob: Job? = null
+    private var deviceSaveError: String? = null
     private var pendingType = "image"
     private var photoLabel = "Before"
 
@@ -652,6 +654,7 @@ modeOk && (query.isBlank() || (if (isDate) dateForms.contains(dotted) else textM
 
     private fun capture(type: String) {
         val job = activeJob ?: return
+        pendingJob = job
 
         val dir = File(
             filesDir,
@@ -747,13 +750,14 @@ modeOk && (query.isBlank() || (if (isDate) dateForms.contains(dotted) else textM
 
             val deviceFolder = saveToDeviceJobFolder(
                 file,
-                activeJob ?: return,
+                pendingJob ?: activeJob ?: return,
                 pendingType == "video"
             )
             status.text =
                 "Saved offline: ${file.name}\n" +
                 "Queued on tablet. ${file.length() / 1024} KB." +
-                if (deviceFolder != null) "\nAlso saved on device: $deviceFolder" else ""
+                if (deviceFolder != null) "\nAlso saved on device: $deviceFolder" else
+                    "\nDEVICE COPY FAILED: ${deviceSaveError ?: "Android did not confirm the device copy."} Drive upload is still queued."
 
             enqueueSync()
         } else {
@@ -763,6 +767,7 @@ modeOk && (query.isBlank() || (if (isDate) dateForms.contains(dotted) else textM
         }
 
         pendingOutput = null
+        pendingJob = null
     }
 
     private fun enqueueSync() {
@@ -874,7 +879,8 @@ modeOk && (query.isBlank() || (if (isDate) dateForms.contains(dotted) else textM
             status.text =
                 "Imported: ${file!!.name}\n" +
                 "Saved offline and queued for upload." +
-                if (deviceFolder != null) "\nAlso saved on device: $deviceFolder" else ""
+                if (deviceFolder != null) "\nAlso saved on device: $deviceFolder" else
+                    "\nDEVICE COPY FAILED: ${deviceSaveError ?: "Android did not confirm the device copy."} Drive upload is still queued."
 
             enqueueSync()
         } catch (e: Exception) {
@@ -890,7 +896,11 @@ modeOk && (query.isBlank() || (if (isDate) dateForms.contains(dotted) else textM
         job: Job,
         isVideo: Boolean
     ): String? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        deviceSaveError = null
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            deviceSaveError = "This Android version does not support the current public-folder save method."
+            return null
+        }
 
         val root = if (isVideo) {
             Environment.DIRECTORY_MOVIES
@@ -912,7 +922,10 @@ modeOk && (query.isBlank() || (if (isDate) dateForms.contains(dotted) else textM
             put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
 
-        val destination = contentResolver.insert(collection, values) ?: return null
+        val destination = contentResolver.insert(collection, values) ?: run {
+            deviceSaveError = "Android could not create the Gallery/Files entry."
+            return null
+        }
         return try {
             val output = contentResolver.openOutputStream(destination)
                 ?: throw IllegalStateException("Could not open device media folder")
@@ -922,10 +935,14 @@ modeOk && (query.isBlank() || (if (isDate) dateForms.contains(dotted) else textM
             val published = ContentValues().apply {
                 put(MediaStore.MediaColumns.IS_PENDING, 0)
             }
-            contentResolver.update(destination, published, null, null)
+            val publishedCount = contentResolver.update(destination, published, null, null)
+            if (publishedCount <= 0) {
+                throw IllegalStateException("Android did not publish the saved media item.")
+            }
             relativePath
-        } catch (_: Exception) {
+        } catch (e: Exception) {
             contentResolver.delete(destination, null, null)
+            deviceSaveError = e.message ?: e.javaClass.simpleName
             null
         }
     }
