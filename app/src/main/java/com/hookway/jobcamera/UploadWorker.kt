@@ -6,6 +6,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential
+import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.client.json.gson.GsonFactory
 import com.google.api.client.http.FileContent
 import com.google.api.services.drive.Drive
@@ -36,6 +37,21 @@ class UploadWorker(
                 .filter { it.isNotBlank() }
                 .distinct()
 
+        fun uploadFailure(error: Exception): Result {
+            recordError(
+                "${error.javaClass.simpleName}: " +
+                    (error.message ?: "Google Drive upload failed")
+            )
+            return if (
+                error is GoogleJsonResponseException &&
+                error.statusCode in listOf(401, 403)
+            ) {
+                Result.failure()
+            } else {
+                Result.retry()
+            }
+        }
+
         val queued = readQueue()
         if (queued.isEmpty()) {
             recordError("")
@@ -43,27 +59,39 @@ class UploadWorker(
         }
 
 
- if (!Integrations.isEnabled(app, "drive")) {
- return@withContext Result.success()
- }
+        if (!Integrations.isEnabled(app, "drive")) {
+            recordError(
+                "Google Drive uploads are switched off. Open Settings and turn on 'Send photos here'."
+            )
+            return@withContext Result.failure()
+        }
 
         val token: String? = try {
  val freshRequest = com.google.android.gms.auth.api.identity.AuthorizationRequest.builder()
  .setRequestedScopes(listOf(com.google.android.gms.common.api.Scope("https://www.googleapis.com/auth/drive.file")))
  .build()
             val freshResult = com.google.android.gms.tasks.Tasks.await(
- com.google.android.gms.auth.api.identity.Identity.getAuthorizationClient(app).authorize(freshRequest)
- )
- val freshToken = freshResult.accessToken
- if (!freshToken.isNullOrBlank()) {
- authPrefs.edit().putString("access_token", freshToken).apply()
- freshToken
- } else {
- authPrefs.getString("access_token", null)
- }
- } catch (e: Exception) {
- authPrefs.getString("access_token", null)
- }
+                com.google.android.gms.auth.api.identity.Identity
+                    .getAuthorizationClient(app)
+                    .authorize(freshRequest)
+            )
+            if (freshResult.hasResolution()) {
+                recordError(
+                    "Google Drive needs permission again. Open Settings and tap RECONNECT GOOGLE DRIVE, then approve access."
+                )
+                return@withContext Result.failure()
+            }
+
+            val freshToken = freshResult.accessToken
+            if (!freshToken.isNullOrBlank()) {
+                authPrefs.edit().putString("access_token", freshToken).apply()
+                freshToken
+            } else {
+                authPrefs.getString("access_token", null)
+            }
+        } catch (e: Exception) {
+            authPrefs.getString("access_token", null)
+        }
         if (token.isNullOrBlank()) {
             recordError("Google Drive is not authorised. Reconnect Drive.")
             return@withContext Result.failure()
@@ -144,21 +172,13 @@ class UploadWorker(
 
 
                 } catch (e: Exception) {
-                    recordError(
-                        "${e.javaClass.simpleName}: " +
-                            (e.message ?: "File upload failed")
-                    )
-                    return@withContext Result.retry()
+                    return@withContext uploadFailure(e)
                 }
             }
 
             Result.success()
         } catch (e: Exception) {
-            recordError(
-                "${e.javaClass.simpleName}: " +
-                    (e.message ?: "Google Drive upload failed")
-            )
-            Result.retry()
+            uploadFailure(e)
         }
     }
 
