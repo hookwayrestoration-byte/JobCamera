@@ -212,6 +212,10 @@ class SettingsActivity : Activity() {
  })
 
  if (connected) {
+ addView(btn("RECONNECT GOOGLE DRIVE") {
+ item.disconnect(this@SettingsActivity)
+ item.connect(this@SettingsActivity)
+ })
  addView(Switch(this@SettingsActivity).apply {
  text = "Send photos here"
  setTextColor(AppStyle.TEXT)
